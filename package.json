@@ -1,6 +1,6 @@
 {
   "name": "chai-jskit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A chai plugin for easily testing JSkit applications.",
   "main": "chai-jskit.js",
   "scripts": {
