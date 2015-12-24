@@ -70,6 +70,12 @@
     if (missingElement(element, action, controller)) return assertWithReason.call(this,pass, assertMessage, refuteMessage, "there is no `$" + element + "` element");
     if (hasNoEventHandlers(element, action, controller)) return assertWithReason.call(this,pass, assertMessage, refuteMessage, "the `" + element + "` element has no event handlers");
     if (hasNoRegisteredEvents(element, eventName, handler, action, controller)) return assertWithReason.call(this,pass, assertMessage, refuteMessage, "the `" + handler + "` function is not registered to the `" + eventName + "` event on `$" + element + "`");
+    if (sinon) {
+      sinon.stub(controller, handler);
+      controller.registerEvents(action);
+      controller["$" + element].trigger(eventName);
+      return assertWithReason.call(this, controller[handler].called, assertMessage, refuteMessage, "the `" + handler + "` function did not fire when `$" + element + "` triggered the `" + eventName + "` event");
+    }
   });
 
   chai.Assertion.addMethod("registerDynamicEvent", function(action, element, eventName, handler) {
@@ -77,12 +83,12 @@
 
     var assertMessage = "expected #{this} to register `" + handler + "` on `" + eventName + "` of the `$" + element + "` element, for the `" + action + "` action dynamically";
     var refuteMessage = "expected #{this} to NOT register `" + handler + "` on `" + eventName + "` of the `$" + element + "` element, for the `" + action + "` action dynamically";
-    var subject = this._obj;
+    var controller = this._obj;
 
-    sinon.stub(subject, handler);
-    subject.registerEvents(action);
-    subject["$" + element].trigger(eventName);
-    this.assert(subject[handler].called, assertMessage, refuteMessage);
+    sinon.stub(controller, handler);
+    controller.registerEvents(action);
+    controller["$" + element].trigger(eventName);
+    this.assert(controller[handler].called, assertMessage, refuteMessage);
   });
 
   chai.Assertion.addMethod("cacheElement", function(action, element, selector) {
