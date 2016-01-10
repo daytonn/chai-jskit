@@ -36,19 +36,19 @@
     this.assert(_.isFunction(this._obj[methodName]), assertMessage, refuteMessage);
   });
 
-  function missingAction(action, controller) {
+  function controllerIsMissingAction(controller, action) {
     return !controller.elements[action];
   }
 
-  function missingElement(element, action, controller) {
-    return !controller.elements[action][element];
+  function controllerIsMissingElement(controller, element) {
+    return !controller[element];
   }
 
-  function hasNoEventHandlers(element, action, controller) {
+  function controllerHasNoEventHandlersForElementOnAction(controller, element, action) {
     return !isArray(controller.elements[action][element]);
   }
 
-  function hasNoRegisteredEvents(element, eventName, handler, action, controller) {
+  function handlerIsNotRegisteredToEventOnElementForAction(handler, eventName, element, action, controller) {
     return !any(tail(controller.elements[action][element]), function(eventHandlers) {
       return eventHandlers[eventName] === handler;
     });
@@ -61,40 +61,75 @@
   chai.Assertion.addMethod("registerEvent", function(action, element, eventName, handler) {
     utils.flag(this, "action", action);
     utils.flag(this, "element", element);
+    var elementKey = element.replace(/^\$/, "");
     var controller = this._obj;
-    var pass = false;
-    var assertMessage = "expected #{this} to register `" + handler + "` on `" + eventName + "` of the `$" + element + "` element, for the `" + action + "` action";
-    var refuteMessage = "expected #{this} to NOT register `" + handler + "` on `" + eventName + "` of the `$" + element + "` element, for the `" + action + "` action";
+    var testResult = { pass: true, reason: "" };
+    var assertMessage = "expected #{this} to register `" + handler + "` on `" + eventName + "` of the `" + element + "` element, for the `" + action + "` action";
+    var refuteMessage = "expected #{this} to NOT register `" + handler + "` on `" + eventName + "` of the `" + element + "` element, for the `" + action + "` action";
 
-    if (missingAction(action, controller)) return assertWithReason.call(this,pass, assertMessage, refuteMessage, "there is no `" + action + "` action");
-    if (missingElement(element, action, controller)) return assertWithReason.call(this,pass, assertMessage, refuteMessage, "there is no `$" + element + "` element");
-    if (hasNoEventHandlers(element, action, controller)) return assertWithReason.call(this,pass, assertMessage, refuteMessage, "the `" + element + "` element has no event handlers");
-    if (hasNoRegisteredEvents(element, eventName, handler, action, controller)) return assertWithReason.call(this,pass, assertMessage, refuteMessage, "the `" + handler + "` function is not registered to the `" + eventName + "` event on `$" + element + "`");
-    if (sinon) {
-      sinon.stub(controller, handler);
+    if (sinon && controller[handler]) {
+      var stub = sinon.stub(controller, handler);
       controller.registerEvents(action);
-      controller["$" + element].trigger(eventName);
-      return assertWithReason.call(this, controller[handler].called, assertMessage, refuteMessage, "the `" + handler + "` function did not fire when `$" + element + "` triggered the `" + eventName + "` event");
+      controller[element].trigger(eventName);
+
+      testResult = {
+        pass: stub.called,
+        reason: "the `" + handler + "` function did not fire when `" + element + "` triggered the `" + eventName + "` event"
+      };
     }
-  });
 
-  chai.Assertion.addMethod("registerDynamicEvent", function(action, element, eventName, handler) {
-    if (!sinon) throw new Error("registerDynamicEvent requires sinon-chai https://github.com/domenic/sinon-chai");
+    if (controllerIsMissingElement(controller, element)) {
+      testResult = {
+        pass: false,
+        reason: "there is no `$" + element + "` element"
+      };
+    }
 
-    var assertMessage = "expected #{this} to register `" + handler + "` on `" + eventName + "` of the `$" + element + "` element, for the `" + action + "` action dynamically";
-    var refuteMessage = "expected #{this} to NOT register `" + handler + "` on `" + eventName + "` of the `$" + element + "` element, for the `" + action + "` action dynamically";
-    var controller = this._obj;
+    if (controllerHasNoEventHandlersForElementOnAction(controller, elementKey, action)) {
+      testResult = {
+        pass: false,
+        reason: "the `" + element + "` element has no event handlers"
+      };
+    }
 
-    sinon.stub(controller, handler);
-    controller.registerEvents(action);
-    controller["$" + element].trigger(eventName);
-    this.assert(controller[handler].called, assertMessage, refuteMessage);
+    if (!testResult.pass && handlerIsNotRegisteredToEventOnElementForAction(handler, eventName, elementKey, action, controller)) {
+      testResult = {
+        pass: false,
+        reason: "the `" + handler + "` function is not registered to the `" + eventName + "` event on `" + element + "`"
+      };
+    }
+
+    assertWithReason.call(this, testResult.pass, assertMessage, refuteMessage, testResult.reason);
   });
 
   chai.Assertion.addMethod("cacheElement", function(action, element, selector) {
+    var testResult = { pass: true, reason: "" };
+    var elementKey = element.replace(/^\$/, "");
+    var assertMessage = "expected #{this} to cache the `" + selector + "` element on the `" + action + "` action";
+    var refuteMessage = "expected #{this} NOT to cache the `" + selector + "` element on the `" + action + "` action";
     var subject = this._obj;
-    if (!contains(keys(subject.elements[action]), element)) return assertWithReason.call(this, pass, assertMessage, refuteMessage, "there is no cache key `" + element + "`");
-    if (!first(flatten([subject.elements[action][element]])) === selector) return assertWithReason.call(this, pass, assertMessage, refuteMessage, "`" + selector + "` is not the selector for the cache key `" + element + "`");
-    if (!subject["$" + element].length) return assertWithReason.call(this, pass, assertMessage, refuteMessage, "`" + selector + "` is not in the DOM");
+
+    if (!subject[element]) {
+      testResult = {
+        pass: false,
+        reason: "there is no cache key `" + element + "`"
+      };
+    }
+
+    if (!first(flatten([subject.elements[action][elementKey]])) === selector) {
+      testResult = {
+        pass: false,
+        reason: "`" + selector + "` is not the selector for the cache key `" + element + "`"
+      };
+    }
+
+    if (!subject[element].length) {
+      testResult = {
+        pass: false,
+        reason: "`" + selector + "` is not in the DOM"
+      };
+    }
+
+    assertWithReason.call(this, testResult.pass, assertMessage, refuteMessage, testResult.reason);
   });
 }));
